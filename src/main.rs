@@ -19,10 +19,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         (@subcommand pack =>
             (about: "Pack a directory into an asar archive")
             (@arg DIR: +required "Target directory")
+            (@arg DEST: +required "Asar archive file destination")
         )
         (@subcommand extract =>
             (about: "Extract all files from an asar archive")
-            (@arg FILE: +required "Asar archive file")
+            (@arg FILE: +required "Target asar archive file")
             (@arg DEST: +required "Destination folder")
         )
     ).get_matches();
@@ -30,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match args.subcommand() {
         ("list", Some(cmd)) => asar::list(cmd.value_of("FILE").unwrap())?,
-        ("pack", Some(cmd)) => asar::pack(cmd.value_of("FILE").unwrap())?,
+        ("pack", Some(cmd)) => asar::pack(cmd.value_of("DIR").unwrap(), cmd.value_of("DEST").unwrap())?,
         ("extract", Some(cmd)) => asar::extract(cmd.value_of("FILE").unwrap(), cmd.value_of("DEST").unwrap())?,
         _ => unreachable!()
     }
