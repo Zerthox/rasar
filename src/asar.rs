@@ -15,7 +15,7 @@ fn read_u32(buffer: &[u8]) -> u32 {
 	result
 }
 
-fn read_header(reader: &mut BufReader<File>) -> Result<(u32, Value), Box<dyn Error>> {
+fn read_header(reader: &mut File) -> Result<(u32, Value), Box<dyn Error>> {
     // read header bytes
     let mut header_buffer = vec![0u8; 16];
     reader.read_exact(&mut header_buffer)?;
@@ -58,11 +58,10 @@ fn iterate_entries_err(json: &Value, mut callback: impl FnMut(&Value, &str) -> R
 }
 
 pub fn list(file: &str) -> Result<(), Box<dyn Error>> {
-    let file = File::open(file)?;
-    let mut reader = BufReader::new(file);
+    let mut file = File::open(file)?;
 
     // read header
-    let (_, json) = read_header(&mut reader)?;
+    let (_, json) = read_header(&mut file)?;
 
     // list files
     iterate_entries(&json, |_, path| println!("\\{}", path));
@@ -76,11 +75,10 @@ pub fn pack(file: &str) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn extract(file: &str, dest: &str) -> Result<(), Box<dyn Error>> {
-    let file = File::open(file)?;
-    let mut reader = BufReader::new(file);
+    let mut file = File::open(file)?;
 
     // read header
-    let (header_size, json) = read_header(&mut reader)?;
+    let (header_size, json) = read_header(&mut file)?;
 
     // create destination folder
     let dest = env::current_dir()?.join(dest);
@@ -93,9 +91,9 @@ pub fn extract(file: &str, dest: &str) -> Result<(), Box<dyn Error>> {
         if val["offset"] != Value::Null {
             let offset = val["offset"].as_str().unwrap().parse::<u64>()?;
             let size = val["size"].as_u64().unwrap();
-            reader.seek(SeekFrom::Start(header_size as u64 + offset))?;
+            file.seek(SeekFrom::Start(header_size as u64 + offset))?;
             let mut buffer = vec![0u8; size as usize];
-            reader.read_exact(&mut buffer)?;
+            file.read_exact(&mut buffer)?;
             fs::write(dest.join(path), buffer)?;
         }
         else {
