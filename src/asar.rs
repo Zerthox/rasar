@@ -1,11 +1,20 @@
-use std::error::Error;
-use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::SeekFrom;
-use std::io::prelude::*;
-use serde_json::Value;
+use std::{
+    error::Error,
+    env,
+    fs,
+    fs::{File, OpenOptions},
+    path::{Path, PathBuf},
+    io,
+    io::{SeekFrom, prelude::*}
+};
+// use glob::glob;
+use serde_json::{json, Value};
+
+const MAX_SIZE: u64 = 4294967295;
+
+fn align_size(value: usize) -> usize {
+    value + (4 - (value % 4)) % 4
+}
 
 fn read_u32(buffer: &[u8]) -> u32 {
 	let mut result = 0;
@@ -14,6 +23,13 @@ fn read_u32(buffer: &[u8]) -> u32 {
 	}
 	result
 }
+
+fn write_u32(buffer: &mut [u8], value: u32) {
+    for i in 0..4 {
+        buffer[i] = (value >> i * 8) as u8;
+    }
+}
+
 
 fn read_header(reader: &mut File) -> Result<(u32, Value), Box<dyn Error>> {
     // read header bytes
@@ -69,8 +85,75 @@ pub fn list(file: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn pack(file: &str) -> Result<(), Box<dyn Error>> {
-	println!("Packing {}", file);
+pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+    let mut header_json = json!({
+        "files": {}
+    });
+    let dir = env::current_dir()?.join(path);
+    if dir.exists() {
+        fn walk_dir(dir: impl AsRef<Path>, json: &mut Value, mut offset: &mut u64) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+            let mut files = vec![];
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let name = entry.file_name().into_string().expect("Error converting OS path to string");
+                let meta = entry.metadata()?;
+                if meta.is_dir() {
+                    json[&name] = json!({
+                        "files": {}
+                    });
+                    files.append(&mut walk_dir(entry.path(), &mut json[&name]["files"], &mut offset)?);
+                }
+                else {
+                    let size = meta.len();
+                    if size > MAX_SIZE {
+                        panic!("File {} ({} GB) is above the maximum possible size of {} GB", name, size as f64 / 1e9, MAX_SIZE as f64 / 1e9);
+                    }
+                    json[&name] = json!({
+                        "offset": offset.to_string(),
+                        "size": size
+                    });
+                    *offset += size;
+                    files.push(entry.path());
+                }
+            }
+            Ok(files)
+        }
+        let files = walk_dir(dir, &mut header_json["files"], &mut 0)?;
+
+        // create json buffer
+        let json = serde_json::to_vec(&header_json)?;
+
+        // compute & write sizes
+        let size = align_size(json.len());
+        let mut header = vec![0u8; 16];
+        header[0] = 4;
+        write_u32(&mut header[4..8], 8 + size as u32);
+        write_u32(&mut header[8..12], 4 + size as u32);
+        write_u32(&mut header[12..16], json.len() as u32);
+        fs::write(dest, &header)?;
+
+        // append json
+        let mut archive = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(dest)?;
+        archive.write_all(&json)?;
+
+        // copy file contents
+        for filename in files {
+            io::copy(&mut File::open(filename)?, &mut archive)?;
+        }
+    }
+    else {
+        // TODO: allow globs
+        // if let Ok(entries) = glob(path) {
+        //     for entry in entries {
+        //         dbg!(entry?);
+        //     }
+        // }
+        panic!("{} is not a valid directory", path);
+    }
+
 	Ok(())
 }
 
