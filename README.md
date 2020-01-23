@@ -1,2 +1,2 @@
 # Rasar
-Pack & extract asar archives in Rust.
+Asar packager & extractor written in Rust.

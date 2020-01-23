@@ -73,8 +73,8 @@ fn iterate_entries_err(json: &Value, mut callback: impl FnMut(&Value, &str) -> R
     Ok(())
 }
 
-pub fn list(file: &str) -> Result<(), Box<dyn Error>> {
-    let mut file = File::open(file)?;
+pub fn list(archive: &str) -> Result<(), Box<dyn Error>> {
+    let mut file = File::open(archive)?;
 
     // read header
     let (_, json) = read_header(&mut file)?;
@@ -157,8 +157,8 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
-pub fn extract(file: &str, dest: &str) -> Result<(), Box<dyn Error>> {
-    let mut file = File::open(file)?;
+pub fn extract(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+    let mut file = File::open(archive)?;
 
     // read header
     let (header_size, json) = read_header(&mut file)?;
@@ -184,6 +184,30 @@ pub fn extract(file: &str, dest: &str) -> Result<(), Box<dyn Error>> {
             if !dir.exists() {
                 fs::create_dir(dir)?;
             }
+        }
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
+pub fn extract_file(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+    let cwd = env::current_dir()?;
+    let dest = cwd.join(dest);
+    let mut file = File::open(archive)?;
+
+    // read header
+    let (header_size, json) = read_header(&mut file)?;
+
+    // iterate over entries
+    iterate_entries_err(&json, |val, path| {
+        if cwd.join(path) == dest {
+            let offset = val["offset"].as_str().unwrap().parse::<u64>()?;
+            let size = val["size"].as_u64().unwrap();
+            file.seek(SeekFrom::Start(header_size as u64 + offset))?;
+            let mut buffer = vec![0u8; size as usize];
+            file.read_exact(&mut buffer)?;
+            fs::write(&dest, buffer)?;
         }
         Ok(())
     })?;

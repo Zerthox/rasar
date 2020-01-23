@@ -1,7 +1,8 @@
 [package]
 name = "rasar"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Zerthox <zerthox@gmail.com>"]
+description = "Asar packager & extractor written in Rust."
 edition = "2018"
 
 [dependencies]
