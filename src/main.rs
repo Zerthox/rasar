@@ -4,9 +4,10 @@ extern crate serde_json;
 
 mod asar;
 
+use std::error::Error;
 use clap::AppSettings;
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = clap_app!(Rasar =>
         (version: "0.1.0")
         (about: "Pack & extract asar archives in Rust")
@@ -21,7 +22,8 @@ fn main() -> Result<(), std::io::Error> {
         )
         (@subcommand extract =>
             (about: "Extract all files from an asar archive")
-            (@arg FILE: +required "Target asar archive file")
+            (@arg FILE: +required "Asar archive file")
+            (@arg DEST: +required "Destination folder")
         )
     ).get_matches();
 
@@ -29,7 +31,7 @@ fn main() -> Result<(), std::io::Error> {
     match args.subcommand() {
         ("list", Some(cmd)) => asar::list(cmd.value_of("FILE").unwrap())?,
         ("pack", Some(cmd)) => asar::pack(cmd.value_of("FILE").unwrap())?,
-        ("extract", Some(cmd)) => asar::extract(cmd.value_of("FILE").unwrap())?,
+        ("extract", Some(cmd)) => asar::extract(cmd.value_of("FILE").unwrap(), cmd.value_of("DEST").unwrap())?,
         _ => unreachable!()
     }
 

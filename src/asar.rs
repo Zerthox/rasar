@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::io::SeekFrom;
 use std::io::prelude::*;
 use serde_json::Value;
 
@@ -69,18 +70,42 @@ pub fn list(file: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn pack(file: &str) -> Result<(), std::io::Error> {
+pub fn pack(file: &str) -> Result<(), Box<dyn Error>> {
 	println!("Packing {}", file);
-	// let file = File::open(file)?;
-	// let mut reader = BufReader::new(file);
-
 	Ok(())
 }
 
-pub fn extract(file: &str) -> Result<(), std::io::Error> {
-	println!("Extracting {}", file);
-    // let file = File::open(file)?;
-    // let mut reader = BufReader::new(file);
+pub fn extract(file: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+    let file = File::open(file)?;
+    let mut reader = BufReader::new(file);
+
+    // read header
+    let (header_size, json) = read_header(&mut reader)?;
+
+    // create destination folder
+    let dest = env::current_dir()?.join(dest);
+    if !dest.exists() {
+        fs::create_dir(&dest)?;
+    }
+
+    // iterate over entries
+    iterate_entries_err(&json, |val, path| {
+        if val["offset"] != Value::Null {
+            let offset = val["offset"].as_str().unwrap().parse::<u64>()?;
+            let size = val["size"].as_u64().unwrap();
+            reader.seek(SeekFrom::Start(header_size as u64 + offset))?;
+            let mut buffer = vec![0u8; size as usize];
+            reader.read_exact(&mut buffer)?;
+            fs::write(dest.join(path), buffer)?;
+        }
+        else {
+            let dir = dest.join(path);
+            if !dir.exists() {
+                fs::create_dir(dir)?;
+            }
+        }
+        Ok(())
+    })?;
 
     Ok(())
 }
