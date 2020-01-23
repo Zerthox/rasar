@@ -9,7 +9,7 @@ use clap::AppSettings;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = clap_app!(Rasar =>
-        (version: "0.1.0")
+        (version: crate_version!())
         (about: "Pack & extract asar archives in Rust")
         (setting: AppSettings::ArgRequiredElseHelp)
         (@subcommand list =>
