@@ -171,15 +171,14 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
     // copy json
     header.copy_within(0..json_size, 16);
 
-    // write sizes
-    header[0] = 4;
+    // write sizes into header
+    write_u32(&mut header[0..4], 4);
     write_u32(&mut header[4..8], 8 + size as u32);
     write_u32(&mut header[8..12], 4 + size as u32);
     write_u32(&mut header[12..16], json_size as u32);
     
+    // write header
     fs::write(dest, &header)?;
-
-    // dbg!(files.iter().filter(|file| file.is_dir()).collect::<Vec<&PathBuf>>());
 
     // copy file contents
     let mut archive = OpenOptions::new()
