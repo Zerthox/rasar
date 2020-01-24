@@ -49,25 +49,25 @@ fn read_header(reader: &mut File) -> Result<(u32, Value), Box<dyn Error>> {
     Ok((header_size + 8, json))
 }
 
-fn iterate_entries(json: &Value, mut callback: impl FnMut(&Value, &str)) {
+fn iterate_entries(json: &Value, mut callback: impl FnMut(&Value, &PathBuf)) {
     iterate_entries_err(json, |current, path| {
         callback(current, path);
         Ok(())
     }).expect("Error iterating entries");
 }
 
-fn iterate_entries_err(json: &Value, mut callback: impl FnMut(&Value, &str) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
-    fn helper(current: &Value, path: String, callback: &mut impl FnMut(&Value, &str) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
+fn iterate_entries_err(json: &Value, mut callback: impl FnMut(&Value, &PathBuf) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
+    fn helper(current: &Value, path: PathBuf, callback: &mut impl FnMut(&Value, &PathBuf) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
         callback(current, &path)?;
         if current["files"] != Value::Null {
             for (key, val) in current["files"].as_object().unwrap() {
-                helper(&val, String::from(&path) + "\\" + key, callback)?;
+                helper(&val, path.join(key), callback)?;
             }
         }
         Ok(())
     }
     for (key, val) in json["files"].as_object().unwrap() {
-        helper(val, String::from(key), &mut callback)?;
+        helper(val, PathBuf::new().join(key), &mut callback)?;
     }
     Ok(())
 }
@@ -79,7 +79,7 @@ pub fn list(archive: &str) -> Result<(), Box<dyn Error>> {
     let (_, json) = read_header(&mut file)?;
 
     // list files
-    iterate_entries(&json, |_, path| println!("\\{}", path));
+    iterate_entries(&json, |_, path| println!("\\{}", path.to_str().expect("Error converting OS path to string")));
 
     Ok(())
 }
@@ -228,7 +228,8 @@ pub fn extract(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 
 pub fn extract_file(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
     let cwd = env::current_dir()?;
-    let dest = cwd.join(dest);
+    let full_path = cwd.join(dest);
+    let dest = cwd.join(Path::new(dest).file_name().unwrap());
     let mut file = File::open(archive)?;
 
     // read header
@@ -236,7 +237,7 @@ pub fn extract_file(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 
     // iterate over entries
     iterate_entries_err(&json, |val, path| {
-        if cwd.join(path) == dest {
+        if cwd.join(path) == full_path {
             let offset = val["offset"].as_str().unwrap().parse::<u64>()?;
             let size = val["size"].as_u64().unwrap();
             file.seek(SeekFrom::Start(header_size as u64 + offset))?;
