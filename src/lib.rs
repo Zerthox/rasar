@@ -97,13 +97,7 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
                 let entry = entry?;
                 let name = entry.file_name().into_string().expect("Error converting OS path to string");
                 let meta = entry.metadata()?;
-                if meta.is_dir() {
-                    json[&name] = json!({
-                        "files": {}
-                    });
-                    files.append(&mut walk_dir(entry.path(), &mut json[&name]["files"], &mut offset)?);
-                }
-                else {
+                if meta.is_file() {
                     let size = meta.len();
                     if size > MAX_SIZE {
                         panic!("File {} ({} GB) is above the maximum possible size of {} GB", name, size as f64 / 1e9, MAX_SIZE as f64 / 1e9);
@@ -114,6 +108,12 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
                     });
                     *offset += size;
                     files.push(entry.path());
+                }
+                else {
+                    json[&name] = json!({
+                        "files": {}
+                    });
+                    files.append(&mut walk_dir(entry.path(), &mut json[&name]["files"], &mut offset)?);
                 }
             }
             Ok(files)
@@ -134,12 +134,7 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
                 current = &mut current[name]["files"];
             }
             let name = entry.file_name().unwrap().to_str().expect("Error converting OS path to string");
-            if entry.is_dir() {
-                current[name] = json!({
-                    "files": {}
-                });
-            }
-            else {
+            if entry.is_file() {
                 let size = entry.metadata()?.len();
                 if size > MAX_SIZE {
                     panic!("File {} ({} GB) is above the maximum possible size of {} GB", name, size as f64 / 1e9, MAX_SIZE as f64 / 1e9);
@@ -151,24 +146,40 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
                 offset += size;
                 files.push(entry);
             }
+            else {
+                current[name] = json!({
+                    "files": {}
+                });
+            }
         }
     }
     else {
         panic!("{} is neither a valid directory nor glob", path);
     }
 
-    // create json buffer
-    let mut json = serde_json::to_vec(&header_json)?;
+    // create header buffer wtih json
+    let mut header = serde_json::to_vec(&header_json)?;
 
-    // compute sizes & write header
-    let size = align_size(json.len());
-    let mut header = vec![0u8; 16 + size];
+    
+    // compute sizes
+    let json_size = header.len();
+    let size = align_size(json_size);
+
+    // resize header
+    header.resize(16 + size, 0);
+
+    // copy json
+    header.copy_within(0..json_size, 16);
+
+    // write sizes
     header[0] = 4;
     write_u32(&mut header[4..8], 8 + size as u32);
     write_u32(&mut header[8..12], 4 + size as u32);
-    write_u32(&mut header[12..16], json.len() as u32);
-    header.append(&mut json);
+    write_u32(&mut header[12..16], json_size as u32);
+    
     fs::write(dest, &header)?;
+
+    // dbg!(files.iter().filter(|file| file.is_dir()).collect::<Vec<&PathBuf>>());
 
     // copy file contents
     let mut archive = OpenOptions::new()
