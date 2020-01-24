@@ -68,7 +68,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 
     match args.subcommand() {
-        ("list", Some(cmd)) => rasar::list(cmd.value_of("ARCHIVE").unwrap())?,
+        ("list", Some(cmd)) => for entry in rasar::list(cmd.value_of("ARCHIVE").unwrap())? {
+            println!("{}", entry.to_str().expect("Error converting OS path to string"));
+        }
         ("pack", Some(cmd)) => rasar::pack(cmd.value_of("DIR").unwrap(), cmd.value_of("DEST").unwrap())?,
         ("extract", Some(cmd)) => rasar::extract(cmd.value_of("ARCHIVE").unwrap(), cmd.value_of("DEST").unwrap())?,
         ("extract-file", Some(cmd)) => rasar::extract_file(cmd.value_of("ARCHIVE").unwrap(), cmd.value_of("DEST").unwrap())?,

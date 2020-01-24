@@ -72,16 +72,17 @@ fn iterate_entries_err(json: &Value, mut callback: impl FnMut(&Value, &PathBuf) 
     Ok(())
 }
 
-pub fn list(archive: &str) -> Result<(), Box<dyn Error>> {
+pub fn list(archive: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut file = File::open(archive)?;
 
     // read header
     let (_, json) = read_header(&mut file)?;
 
     // list files
-    iterate_entries(&json, |_, path| println!("\\{}", path.to_str().expect("Error converting OS path to string")));
+    let mut files = vec![];
+    iterate_entries(&json, |_, path| files.push(path.clone()));
 
-    Ok(())
+    Ok(files)
 }
 
 pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
