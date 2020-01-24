@@ -158,26 +158,23 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
     }
 
     // create json buffer
-    let json = serde_json::to_vec(&header_json)?;
+    let mut json = serde_json::to_vec(&header_json)?;
 
-    // compute & write sizes
+    // compute sizes & write header
     let size = align_size(json.len());
-    dbg!(json.len(), size);
-    let mut header = vec![0u8; 16];
+    let mut header = vec![0u8; 16 + size];
     header[0] = 4;
     write_u32(&mut header[4..8], 8 + size as u32);
     write_u32(&mut header[8..12], 4 + size as u32);
     write_u32(&mut header[12..16], json.len() as u32);
+    header.append(&mut json);
     fs::write(dest, &header)?;
 
-    // append json
+    // copy file contents
     let mut archive = OpenOptions::new()
         .write(true)
         .append(true)
         .open(dest)?;
-    archive.write_all(&json)?;
-
-    // copy file contents
     for filename in files {
         io::copy(&mut File::open(filename)?, &mut archive)?;
     }
