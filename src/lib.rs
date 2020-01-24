@@ -10,7 +10,7 @@ use std::{
 use glob::glob;
 use serde_json::{json, Value};
 
-const MAX_SIZE: u64 = 4294967295;
+const MAX_SIZE: u64 = std::u32::MAX as u64;
 
 fn align_size(size: usize) -> usize {
     size + (4 - (size % 4)) % 4
@@ -18,15 +18,15 @@ fn align_size(size: usize) -> usize {
 
 fn read_u32(buffer: &[u8]) -> u32 {
 	let mut result = 0;
-	for i in 0..4 {
-		result += (buffer[i] as u32) << i * 8;
+	for (i, byte) in buffer.iter().enumerate().take(4) {
+		result += (*byte as u32) << (i * 8);
 	}
 	result
 }
 
 fn write_u32(buffer: &mut [u8], value: u32) {
-    for i in 0..4 {
-        buffer[i] = (value >> i * 8) as u8;
+    for (i, byte) in buffer.iter_mut().enumerate().take(4) {
+        *byte = (value >> (i * 8)) as u8;
     }
 }
 
@@ -130,8 +130,8 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
                 Component::Normal(name) => Path::new(name),
                 _ => unreachable!()
             }).collect();
-            for i in 0..comps.len() - 1 {
-                let name = comps[i].file_name().unwrap().to_str().expect("Error converting OS path to string");
+            for comp in comps.iter().take(comps.len() - 1) {
+                let name = comp.file_name().unwrap().to_str().expect("Error converting OS path to string");
                 current = &mut current[name]["files"];
             }
             let name = entry.file_name().unwrap().to_str().expect("Error converting OS path to string");
@@ -160,7 +160,6 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 
     // create header buffer wtih json
     let mut header = serde_json::to_vec(&header_json)?;
-
     
     // compute sizes
     let json_size = header.len();
