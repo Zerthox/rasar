@@ -1,11 +1,6 @@
-extern crate clap;
-extern crate serde_json;
-
 use clap::{crate_description, crate_version, App, AppSettings, Arg, SubCommand};
-use rasar;
-use std::error::Error;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), rasar::Error> {
 	let args = App::new("Rasar")
 		.version(crate_version!())
 		.about(crate_description!())
@@ -16,6 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 		.subcommand(
 			SubCommand::with_name("list")
 				.visible_alias("l")
+				.visible_alias("ls")
 				.about("List all files included in an asar archive")
 				.arg(
 					Arg::with_name("ARCHIVE")
@@ -30,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 				.arg(
 					Arg::with_name("DIR")
 						.required(true)
-						.help("Target directory"),
+						.help("Target directory path or glob"),
 				)
 				.arg(
 					Arg::with_name("DEST")

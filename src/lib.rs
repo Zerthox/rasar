@@ -1,36 +1,21 @@
+mod error;
+mod util;
+
+pub use error::Error;
 use glob::glob;
 use serde_json::{json, Value};
 use std::{
-	env,
-	error::Error,
-	fs,
+	env, fs,
 	fs::{File, OpenOptions},
 	io,
 	io::{prelude::*, SeekFrom},
 	path::{Component, Path, PathBuf},
 };
+use util::{align_size, read_u32, write_u32};
 
 const MAX_SIZE: u64 = std::u32::MAX as u64;
 
-fn align_size(size: usize) -> usize {
-	size + (4 - (size % 4)) % 4
-}
-
-fn read_u32(buffer: &[u8]) -> u32 {
-	let mut result = 0;
-	for (i, byte) in buffer.iter().enumerate().take(4) {
-		result += (*byte as u32) << (i * 8);
-	}
-	result
-}
-
-fn write_u32(buffer: &mut [u8], value: u32) {
-	for (i, byte) in buffer.iter_mut().enumerate().take(4) {
-		*byte = (value >> (i * 8)) as u8;
-	}
-}
-
-fn read_header(reader: &mut File) -> Result<(u32, Value), Box<dyn Error>> {
+fn read_header(reader: &mut File) -> Result<(u32, Value), io::Error> {
 	// read header bytes
 	let mut header_buffer = vec![0u8; 16];
 	reader.read_exact(&mut header_buffer)?;
@@ -59,13 +44,13 @@ fn iterate_entries(json: &Value, mut callback: impl FnMut(&Value, &PathBuf)) {
 
 fn iterate_entries_err(
 	json: &Value,
-	mut callback: impl FnMut(&Value, &PathBuf) -> Result<(), Box<dyn Error>>,
-) -> Result<(), Box<dyn Error>> {
+	mut callback: impl FnMut(&Value, &PathBuf) -> Result<(), Error>,
+) -> Result<(), Error> {
 	fn helper(
 		current: &Value,
 		path: PathBuf,
-		callback: &mut impl FnMut(&Value, &PathBuf) -> Result<(), Box<dyn Error>>,
-	) -> Result<(), Box<dyn Error>> {
+		callback: &mut impl FnMut(&Value, &PathBuf) -> Result<(), Error>,
+	) -> Result<(), Error> {
 		callback(current, &path)?;
 		if current["files"] != Value::Null {
 			for (key, val) in current["files"].as_object().unwrap() {
@@ -80,7 +65,7 @@ fn iterate_entries_err(
 	Ok(())
 }
 
-pub fn list(archive: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+pub fn list(archive: &str) -> Result<Vec<PathBuf>, Error> {
 	let mut file = File::open(archive)?;
 
 	// read header
@@ -93,7 +78,7 @@ pub fn list(archive: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
 	Ok(files)
 }
 
-pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+pub fn pack(path: &str, dest: &str) -> Result<(), Error> {
 	let mut header_json = json!({
 		"files": {}
 	});
@@ -104,7 +89,7 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 			dir: impl AsRef<Path>,
 			json: &mut Value,
 			mut offset: &mut u64,
-		) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+		) -> Result<Vec<PathBuf>, Error> {
 			let mut files = vec![];
 			for entry in fs::read_dir(dir)? {
 				let entry = entry?;
@@ -225,7 +210,7 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
-pub fn extract(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+pub fn extract(archive: &str, dest: &str) -> Result<(), Error> {
 	let mut file = File::open(archive)?;
 
 	// read header
@@ -258,7 +243,7 @@ pub fn extract(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
-pub fn extract_file(archive: &str, dest: &str) -> Result<(), Box<dyn Error>> {
+pub fn extract_file(archive: &str, dest: &str) -> Result<(), Error> {
 	let cwd = env::current_dir()?;
 	let full_path = cwd.join(dest);
 	let dest = cwd.join(Path::new(dest).file_name().unwrap());
