@@ -1,5 +1,6 @@
 use std::{convert::From, error, fmt, io, num::ParseIntError};
 
+/// Enum of all possible errors during manipulation of asar archives.
 #[derive(Debug)]
 pub enum Error {
 	IoError(io::Error),

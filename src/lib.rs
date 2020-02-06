@@ -13,8 +13,12 @@ use std::{
 };
 use util::{align_size, read_u32, write_u32};
 
+/// Maximum possible file size for files in asar archives.
 const MAX_SIZE: u64 = std::u32::MAX as u64;
 
+/// Read the header of an asar archive and extract the header size & json.
+///
+/// This may return an `io::Error` if there is an error reading the file.
 fn read_header(reader: &mut File) -> Result<(u32, Value), io::Error> {
 	// read header bytes
 	let mut header_buffer = vec![0u8; 16];
@@ -34,14 +38,16 @@ fn read_header(reader: &mut File) -> Result<(u32, Value), io::Error> {
 	Ok((header_size + 8, json))
 }
 
+/// Iterate over all entries in an asar archive.
 fn iterate_entries(json: &Value, mut callback: impl FnMut(&Value, &PathBuf)) {
 	iterate_entries_err(json, |current, path| {
 		callback(current, path);
 		Ok(())
 	})
-	.expect("Error iterating entries");
+	.expect("Unexpected error while iterating archive entries");
 }
 
+/// Iterate over all entries in an asar archive while forwarding errors from the passed closure.
 fn iterate_entries_err(
 	json: &Value,
 	mut callback: impl FnMut(&Value, &PathBuf) -> Result<(), Error>,
@@ -65,7 +71,14 @@ fn iterate_entries_err(
 	Ok(())
 }
 
-pub fn list(archive: &str) -> Result<Vec<PathBuf>, Error> {
+/// Get a list of all files in an asar archive.
+///
+/// # Examples
+///
+/// ```no_run
+/// let file_entries = rasar::list("myarchive.asar").expect("Something went wrong");
+/// ```
+pub fn list(archive: &str) -> Result<Vec<PathBuf>, io::Error> {
 	let mut file = File::open(archive)?;
 
 	// read header
@@ -78,6 +91,16 @@ pub fn list(archive: &str) -> Result<Vec<PathBuf>, Error> {
 	Ok(files)
 }
 
+/// Pack a directory into an asar archive.
+///
+/// # Examples
+///
+/// ```no_run
+/// match rasar::pack("myfolder", "myarchive.asar") {
+/// 	Ok(()) => println!("Success!"),
+/// 	Err(err) => panic!("This should not have happened!")
+/// }
+/// ```
 pub fn pack(path: &str, dest: &str) -> Result<(), Error> {
 	let mut header_json = json!({
 		"files": {}
@@ -179,7 +202,7 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Error> {
 		panic!("{} is neither a valid directory nor glob", path);
 	}
 
-	// create header buffer wtih json
+	// create header buffer with json
 	let mut header = serde_json::to_vec(&header_json)?;
 
 	// compute sizes
@@ -210,6 +233,16 @@ pub fn pack(path: &str, dest: &str) -> Result<(), Error> {
 	Ok(())
 }
 
+/// Extract all files from an asar archive.
+///
+/// # Examples
+///
+/// ```no_run
+/// match rasar::extract("myarchive.asar", "extracted") {
+/// 	Ok(()) => println!("Success!"),
+/// 	Err(err) => panic!("This should not have happened!")
+/// }
+/// ```
 pub fn extract(archive: &str, dest: &str) -> Result<(), Error> {
 	let mut file = File::open(archive)?;
 
@@ -243,6 +276,16 @@ pub fn extract(archive: &str, dest: &str) -> Result<(), Error> {
 	Ok(())
 }
 
+/// Extract a single file from an asar archive.
+///
+/// # Examples
+///
+/// ```no_run
+/// match rasar::extract("myarchive.asar", "file.txt") {
+/// 	Ok(()) => println!("Success!"),
+/// 	Err(err) => panic!("This should not have happened!")
+/// }
+/// ```
 pub fn extract_file(archive: &str, dest: &str) -> Result<(), Error> {
 	let cwd = env::current_dir()?;
 	let full_path = cwd.join(dest);
